@@ -1,38 +1,125 @@
+# [Linux session(会话)](https://www.cnblogs.com/liujunjun/p/12217771.html)
 
-# (3条消息) Linux EUID，SUID，RUID简单理解_Ray的博客-CSDN博客
+# session 是什么？
 
-> 最近在做信息系统安全中的实验，实验基于Syracuse SEED labs，其中设计比较多的是set-uid程序，那么就必须要对RUID（实际用户）、EUID(有效用户)、SUID(保存用户)几个概念有一个比较清晰的认识，以下内容便于以后及时回顾。
+我们常见的 Linux session 一般是指 shell session。Shell session 是终端中当前的状态，在终端中只能有一个 session。当我们打开一个新的终端时，总会创建一个新的 shell session。
 
-1，基本概念：  
-实际用户ID（RUID）：用于标识一个系统中用户是谁，一般是在登录之后，就被唯一确定的，就是登陆的用户的uid
+就进程间的关系来说，session 由一个或多个进程组组成。一般情况下，来自单个登录的所有进程都属于同一个 session。我们可以通过下图来理解进程、进程组和 session 之间的关系：
 
-有效用户ID（EUID）：用于系统决定用户对系统资源的权限。也就是说当用户做任何一个操作时，最终看它有没有权限，都是在判断有效用户ID是否有权限，如果有，则OK，否则报错不能执行。在正常情况下，一个用户登录之后（我们假设是A用户），A用户的有效用户ID和实际用户ID是相同的，但是如果A用户在某些场景中想要执行一些特权操作，而上面我们说到用户的任何操作，LINUX内核都是通过检验有效用户ID来判断当前执行这个操作的用户是否具有权限，显然是特权操作，A用户没有权限，所以A用户就只能通过一定的手段来修改当前的有效用户ID使其具有执行特权操作的权限。这里说明了下面为什么我们需要修改有效用户ID，就是想再某一时刻能够执行一些特权操作。下面在举例说明。
+![](assets/1614998215-b76356ab360effc67df90210229be8a9.png)
 
-设置用户ID位：用于对外的权限的开发，它的作用是我们如何去修改有效用户ID，在后面的例子中在展开。
+ 会话是由会话中的第一个进程创建的，一般情况下是打开终端时创建的 shell 进程。该进程也叫 session 的领头进程。Session 中领头进程的 PID 也就是 session 的 SID。我们可以通过下面的命令查看 SID：
 
-保存设置用户ID（SUID）：是有效用户ID副本，既然有效用户ID是副本，那么它的作用肯定是为了以后恢复有效用户ID用的。
+```plain
+[root@localhost ~]# ps -o pid,ppid,pgid,sid,tty,comm
+   PID   PPID   PGID    SID TT       COMMAND
+ 46882  46878  46882  46882 pts/0    bash
+ 46899  46882  46899  46882 pts/0    ps
+```
 
-2，改变三个用户ID的方法  
-下面这幅图给出了改变实际用户ID，有效用户ID和保存设置用户ID的方法  
-![这里写图片描述](assets/1614996305-72541531081ea3641e379f0f2f6448ea.png)
+Session 中的每个进程组被称为一个 job，有一个 job 会成为 session 的前台 job(foreground)，其它的 job 则是后台 job(background)。每个 session 连接一个控制终端(control terminal)，控制终端中的输入被发送给前台 job，从前台 job 产生的输出也被发送到控制终端上。同时由控制终端产生的信号，比如 ctrl + z 等都会传递给前台 job。
 
-3，实例1，如何在权限不够的情况下执行特权权限，也就是更改我们的有效用户ID。  
-我们知道用户的密码都是存放在/etc/shadow文件下，我们看下这个文件的权限root@debian:~# ls -l /etc/shadow  
-\-rw-r—– 1 root shadow 8013 Sep 8 14:58 /etc/shadow  
-假如我是一个普通用户，显然我是可以修改我的密码的，通过passwd命令，无可厚非。自己修改自己的密码肯定是被允许的。但是仔细想想你会发现不对啊，我作为一个普通用户登录后，我的实际用户ID和有效用户ID都是我自己的UID。从上面可以看出，显然我不具有修改/etc/shadow文件的权限，那我执行passwd命令时怎么改我的密码的呢？在上面1，基本概念中我们知道决定我们权限的是执行操作时的有效用户ID，所有我们在执行passwd命令时，我们的有效用户ID肯定被修改了。OK，我们看下面：root@debian:~# ls -l /usr/bin/passwd  
-\-rwsr-xr-x 1 root root 43280 Feb 16 2011 /usr/bin/passwd我们看到了一个s，对的，它就是我们的保存设置用户ID位，上面我们说过这个位的作用就是修改有效用户ID，那我们来看看他是如何修改执行passwd命令时的有效用户ID的。  
-首先我们看下命令执行的过程，当普通用户执行passwd命令时，shell会fork出一个子进程，此时进程有效用户ID还是普通用户ID，然后exec程序执行/usr/bin/passwd。通过上面的表我们会知道，exec发现/usr/bin/passwd有SUID位，于是会把进程的有效用户ID设成设置成文件用户ID，显然就是root, 此时这个进程都获得了root权限, 得到了读写/etc/shadow文件的权限, 从而普通用户可完成密码的修改。exec进程退出后会恢复普通用户的EUID为普通用户ID.这样就不会使普通用户一直拥有root权限。  
-这就是我们设置用户ID位的作用，它的存在就是为了普通用户在某些需要特权权限时，去临时的改变有效用户ID而获得特权权限。但是你可能有疑问，为什么我们不用setuid()直接修改呢？何苦绕这么大的弯子。但是如果可以使用setuid()来直接修改有效用户ID来获得特权权限，那么我们的特权权限就会不可控了。这违背了最小权限模型。所以我们Linux特意将setuid设置成在非特权用户下面，有效用户ID只能设置成为实际用户ID和保存设置用户ID，而保存设置用户ID又是来自于有效用户ID的复制，而有效用户ID只能是实际用户ID或者文件所有者ID（在你设置了保存设置用户ID情况下才可以）。这样你就没法将有效用户ID设置成随意值，所以对普通用户创建的任何文件如果没有得到超级用户的授权，那么无论他怎么编写代码来设置自己的有效用户ID，或者设置保存用户ID位，由于你这个可执行文件是你自己编写的，所有你的权限更本没有得到实质性的改变。这里也就是说只有root自己创建的文件才具有这样的特权权限。这样是不是很好的保护了操作系统对权限的控制呢？
+一般情况下 session 和终端是一对一的关系，当我们打开多个终端窗口时，实际上就创建了多个 session。
 
-4，实例2，保存设置用户ID的作用  
-那么保存设置用户ID的作用又是什么呢？既然保存用户ID是有效用户ID的副本，那么肯定是为在某个时刻用于恢复我们的有效用户ID。这样就可能实现我们的用户权限的切换。例如：man（这是AUP上面的例子，当然实际linux上好像不是这样实现，不过为了便于说明，还是直接使用了这个例子）  
-man程序的实际用户ID是man，有效用户ID也是man  
-1、首先我们的进程要执行man命令，所以exec发现/usr/bin/man已经设置了用户ID位，于是进程的有效用户ID给改了/usr/bin/man的拥有者，即改成man了，并且复制了man给保存设置用户ID，然后我们就可以顺利执行man命令了。  
-此时我们进程的ID：  
-实际用户ID = 我们的用户ID  
-有效用户ID = man（为了执行man命令）  
-保存的设置用户ID = man（exec设置的）man程序访问需要配置文件和手册页，这些文件时名为man的用户所有的，因为有效用户ID是man,所有我们的操作得以顺利的被执行了。2，我们的进程要求man执行其他命令（这里不仅我们要执行man命令，我们还会让man代表我们执行一些命令），但是现在我们的有效ID是man，所以需要更改有效ID为我们进程的实际ID，调用setuid（getuid（））函数,由于我不是超级用户，所以，  
-实际用户ID = 我们的用户ID  
-有效用户ID = 我们的用户ID（setuid改的）  
-保存的设置用户ID = man现在man进程是以我们的用户ID而运行的，这就意味着能访问的只有我们通常可以访问的，而没有额外的权限，  
-3，当man完成代替我们执行的命令后，我们当然要回到我们之前有效用户ID，也就是man,此时我们的保存设置用户ID这个副本就开始发挥它的作用了，我们只需要setuid(geteuid());即可，通过了这个有效用户ID的副本保存设置用户ID，我们的有效用户ID才能在man->uid->man这样的切换。如果没有保存设置用户ID这个副本，显然，我们是没有办法在man程序代替我们执行完命令之后，在将有效用户ID设置成man的。
+Session 的意义在于多个工作(job)在一个终端中运行，其中的一个为前台 job，它直接接收该终端的输入并把结果输出到该终端。其它的 job 则在后台运行。
+
+# session 的诞生与消亡
+
+通常，新的 session 由系统登录程序创建，session 中的领头进程是运行用户登录 shell 的进程。新创建的每个进程都会属于一个进程组，当创建一个进程时，它和父进程在同一个进程组、session 中。
+
+将进程放入不同 session 的惟一方法是使用 setsid 函数使其成为新 session 的领头进程。这还会将 session 领头进程放入一个新的进程组中。
+
+当 session 中的所有进程都结束时 session 也就消亡了。实际使用中比如网络断开了，session 肯定是要消亡的。另外就是正常的消亡，比如让 session 的领头进程退出。一般情况下 session 的领头进程是 shell 进程，如果它处于前台，我们可以使用 exit 命令或者是 ctrl + d 让它退出。或者我们可以直接通过 kill 命令杀死 session 的领头进程。这里面的原理是：当系统检测到挂断(hangup)条件时，内核中的驱动会将 SIGHUP 信号发送到整个 session。通常情况下，这会杀死 session 中的所有进程。
+
+session 与终端的关系  
+如果 session 关联的是伪终端，这个伪终端本身就是随着 session 的建立而创建的，session 结束，那么这个伪终端也会被销毁。  
+如果 session 关联的是 tty1-6，tty 则不会被销毁。因为该终端设备是在系统初始化的时候创建的，并不是依赖该会话建立的，所以当 session 退出，tty 仍然存在。只是 init 系统在 session 结束后，会重启 getty 来监听这个 tty。
+
+# nohup
+
+如果我们在 session 中执行了 nohup 等类似的命令，当 session 消亡时，相关的进程并不会随着 session 结束，原因是这些进程不再受 SIGHUP 信号的影响。比如我们执行下面的命令：
+
+```plain
+$ nohup sleep 1000 >/dev/null 2>&1 & 
+```
+
+![](assets/1614998215-9b894700ffc3f0b2bd9c343b7e6f1dab.png)
+
+此时 sleep 进程的 sid 和其它进程是相同的，还可以通过 pstree 命令看到进程间的父子关系：
+
+![](assets/1614998215-4cbc0ac4d95437d176f492efe5d1d3b8.png)
+
+如果我们退出当前 session 的领头进程(bash)，sleep 进程并不会退出，这样我们就可以放心的等待该进程运行结果了。  
+nohup 并不改变进程的 sid，同时也说明在这种情况中，虽然 session 的领头进程退出了，但是 session 依然没有被销毁(至少 sid 还在被引用)。重新建立连接，通过下面的命令查看 sleep 进程的信息，发现进程的 sid 依然是 7837：
+
+![](assets/1614998215-8c9b3b5e2861dac5b9ebe237f8f14cb2.png)
+
+但是此时的 sleep 已经被系统的 1 号进程 systemd 收养了：
+
+![](assets/1614998215-b099371452b62d3474f96103bdf31d82.png)
+
+# setsid
+
+setsid 会创建一个新的 session，它的目的是让进程在后台执行命令，实现方式就是让命令进程运行在一个新的与终端脱离的 session 中。看下面的示例：
+
+```plain
+$ setsid sleep 1000
+```
+
+查找之下居然没有发现 sleep 进程的踪迹：
+
+![](assets/1614998215-3dbf5b02cc29f224f02a6d7dddb679b4.png)
+
+通过 grep 查询 sleep 进程的 PID：
+
+![](assets/1614998215-1dd3ac262e65a5f761bdf1b4fbe0aee6.png)
+
+去查看 sleep 进程所在的 sid，发现是一个新的 session ID，并且没有关联终端：
+
+![](assets/1614998215-105e3eeaaa590df7bc678f855a6fe462.png)
+
+当一个进程通过调用 setsid 成为一个新的 session 领头进程时，它会与控制终端断开连接。
+
+此时通过 pstree 查看进程间的关系，发现 sleep 进程直接被系统的 1 号进程 systemd 收养了：
+
+![](assets/1614998215-6be75b074b9c243e1bbdcbd96727c97d.png)
+
+# 控制终端(controlling terminal)
+
+**控制终端是进程的一个属性。**通过 fork 系统调用创建的子进程会从父进程那里继承控制终端。这样，session 中的所有进程都从 session 领头进程那里继承控制终端。Session 的领头进程称为终端的控制进程(controlling process)。简单点说就是：**一个 session 只能与一个终端关联，这个终端被称为 session 的控制终端(controlling terminal)。**同时只能由 session 的领头进程来建立或者改变终端与 session 的联系。我们可以通过 ps 命令查看进程的控制终端：
+
+![](assets/1614998215-abfecdc99ec4e97e71089a5a1e368c7f.png)
+
+支持 job control 的 **shell** 必须能够控制在某一时刻由哪个 job 使用终端。否则，可能会有多个 job 试图同时从终端读取数据，这会导致进程在接收用户输入时的混乱。为了防止这种情况发生，shell 必须按照预定的协议与终端驱动程序协作。
+
+shell 一次只允许一个 job(进程组)访问控制终端。来自控制终端的某些输入会导致信号被发送到与控制终端关联的 job(进程组)中的所有进程。该 job 被称为控制终端上的前台 job。由 shell 管理的其他 job 在不访问终端的情况下，被称为后台 job。
+
+Shell 的职责是通知 job 何时停止何时启动，还要把 job 的信息通知给用户，并提供机制允许用户继续暂停的 job、在前台和后台之间切换 job。比如前台 job 可以无限制的自由使用控制终端，而后台 job 则不可以。当后台 job 中的进程试图从其控制终端读取数据时，通常会向进程组发送 SIGTTIN 信号。这通常会导致该组中的所有进程停止(变成 stopped 状态)。类似地，当后台 job 中的进程试图写入其控制终端时，默认行为是向进程组发送 SIGTTOU 信号，但是否允许写入的控制会更加的复杂。
+
+**参考：**  
+[What is the definition of a “session” in linux?](https://superuser.com/questions/651111/what-is-the-definition-of-a-session-in-linux)  
+[Linux session和进程组概述](https://segmentfault.com/a/1190000009152815)   
+[Job Control](https://www.gnu.org/savannah-checkouts/gnu/libc/manual/html_node/Job-Control.html)  
+[Linux TTY/PTS概述](https://segmentfault.com/a/1190000009082089)  
+[setsid source code](https://git.kernel.org/pub/scm/utils/util-linux/util-linux.git/plain/sys-utils/setsid.c?id=HEAD)
+
+分类: [CentOS7](https://www.cnblogs.com/liujunjun/category/1609262.html)
+
+[好文要顶](javascript:) [关注我](javascript:) [收藏该文](javascript:) [![](assets/1614998215-3212f7b914cc9773fb30bbf4656405fc.png)](javascript: "分享至新浪微博") [![](assets/1614998215-cb7153d1c13a5d9aef10ebab342f6f71.png)](javascript: "分享至微信")
+
+[![](assets/1614998215-6f6c452d93ffe858a0f3fafcc7875d9a.png)](https://home.cnblogs.com/u/liujunjun/)
+
+[星火撩原](https://home.cnblogs.com/u/liujunjun/)  
+[关注 - 20](https://home.cnblogs.com/u/liujunjun/followees/)  
+[粉丝 - 25](https://home.cnblogs.com/u/liujunjun/followers/)
+
+[+加关注](javascript:)
+
+0
+
+0
+
+[«](https://www.cnblogs.com/liujunjun/p/12214640.html) 上一篇： [Git详解及 github与gitlab使用](https://www.cnblogs.com/liujunjun/p/12214640.html "发布于 2020-01-19 16:58")  
+[»](https://www.cnblogs.com/liujunjun/p/12217779.html) 下一篇： [Linux job control](https://www.cnblogs.com/liujunjun/p/12217779.html "发布于 2020-01-20 14:19")
+
+posted @ 2020-01-20 14:17  [星火撩原](https://www.cnblogs.com/liujunjun/)  阅读(1017)  评论(0)  [编辑](https://i.cnblogs.com/EditPosts.aspx?postid=12217771)  [收藏](javascript:)
