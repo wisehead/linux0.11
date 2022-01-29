@@ -23,4 +23,5 @@ main_rename
 --sched_init
 ----set_system_gate (0x80, &system_call);
 ------_system_call//system_call.s
+--------sys_signal
 ```
