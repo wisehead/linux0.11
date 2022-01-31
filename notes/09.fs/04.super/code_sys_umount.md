@@ -35,6 +35,6 @@ sys_umount
 ```
 sb->s_isup
 sb->s_imount
-inode = namei (dev_name)
+inode = namei (dev_name)///dev/hd0
 三者什么关系？？？
 ```
