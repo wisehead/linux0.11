@@ -40,3 +40,8 @@ void free_block(int dev, int block)
     sb->s_zmap[block/8192]->b_dirt = 1;
 }
 ```
+
+#2.note
+
+由于函数free_block中没有将count--
+因此caller需要配合调用brelse，做count--操作。
