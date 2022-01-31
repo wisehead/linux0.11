@@ -41,3 +41,10 @@ put_super (int dev)
     return;
 }
 ```
+
+#2.caller
+
+```
+- sys_umount
+- check_disk_change
+```
