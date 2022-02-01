@@ -38,4 +38,42 @@ find_entry
             }
         }
 --}
+--block = (*dir)->i_zone[0]
+--bh = bread((*dir)->i_dev,block)
+// 在目录项数据块中搜索匹配指定文件名的目录项，首先让de 指向数据块，并在不超过目录中目录项数
+// 的条件下，循环执行搜索。
+    i = 0;
+    de = (struct dir_entry *) bh->b_data;
+    while (i < entries) {
+// 如果当前目录项数据块已经搜索完，还没有找到匹配的目录项，则释放当前目录项数据块。
+        if ((char *)de >= BLOCK_SIZE+bh->b_data) {
+            brelse(bh);
+            bh = NULL;
+// 在读入下一目录项数据块。若这块为空，则只要还没有搜索完目录中的所有目录项，就跳过该块，
+// 继续读下一目录项数据块。若该块不空，就让de 指向该目录项数据块，继续搜索。
+            if (!(block = bmap(*dir,i/DIR_ENTRIES_PER_BLOCK)) ||
+                !(bh = bread((*dir)->i_dev,block))) {
+                i += DIR_ENTRIES_PER_BLOCK;
+                continue;
+            }
+            de = (struct dir_entry *) bh->b_data;
+        }
+// 如果找到匹配的目录项的话，则返回该目录项结构指针和该目录项数据块指针，退出。
+        if (match(namelen,name,de)) {
+            *res_dir = de;
+            return bh;
+        }
+// 否则继续在目录项数据块中比较下一个目录项。
+        de++;
+        i++;
+    }
+// 若指定目录中的所有目录项都搜索完还没有找到相应的目录项，则释放目录项数据块，返回NULL。
+    brelse(bh);
+    
+```
+
+#2.note
+
+```
+安装点和安装文件系统的目录，这两个概念是怎么回事？？？
 ```
