@@ -23,10 +23,60 @@ int do_execve(unsigned long * eip,long tmp,char * filename,char ** argv, char **
 --bh = bread(inode->i_dev,inode->i_zone[0])
 // 下面对执行文件的头结构数据进行处理，首先让ex 指向执行头部分的数据结构。
 --ex = *((struct exec *) bh->b_data); /* 读取执行头部分 */
+
+
+
+//=========================================================
+//处理脚本
 // 如果执行文件开始的两个字节为'#!'，并且sh_bang 标志没有置位，则处理脚本文件的执行。
 --if ((bh->b_data[0] == '#') && (bh->b_data[1] == '!') && (!sh_bang)) 
-----
+// 复制执行程序头一行字符'#!'后面的字符串到buf 中，其中含有脚本处理程序名。
+----strncpy(buf, bh->b_data+2, 1022);
+/*
+ * OK，我们已经解析出解释程序的文件名以及(可选的)参数。
+*/
+// 若sh_bang 标志没有设置，则设置它，并复制指定个数的环境变量串和参数串到参数和环境空间中。
+--if (sh_bang++ == 0) {
+            p = copy_strings(envc, envp, page, p, 0);
+            p = copy_strings(--argc, argv+1, page, p, 0);
+--}
+        /*
+         * 拼接(1) argv[0]中放解释程序的名称
+         * (2) (可选的)解释程序的参数
+         * (3) 脚本程序的名称
+         *
+         * 这是以逆序进行处理的，是由于用户环境和参数的存放方式造成的。
+         */
+// 复制脚本程序文件名到参数和环境空间中。
+--p = copy_strings(1, &filename, page, p, 1);
+// 复制解释程序的参数到参数和环境空间中。
+--argc++;
+--if (i_arg) {
+            p = copy_strings(1, &i_arg, page, p, 2);
+            argc++;
+--}
+// 复制解释程序文件名到参数和环境空间中。若出错，则置出错码，跳转到exec_error1。
+--p = copy_strings(1, &i_name, page, p, 2);
+--argc++;
+        /*
+         * OK，现在使用解释程序的i 节点重启进程。
+         */
+// 保留原fs 段寄存器（原指向用户数据段），现置其指向内核数据段。
+--old_fs = get_fs();
+--set_fs(get_ds());
+// 取解释程序的i 节点，并跳转到restart_interp 处重新处理。
+--if (!(inode=namei(interp))) { /* get executables inode */
+            set_fs(old_fs);
+            retval = -ENOENT;
+            goto exec_error1;
+--}
+--set_fs(old_fs);
+--goto restart_interp;
+        
 --//end if ((bh->b_data[0] == '#') && (bh->b_data[1] == '!') 
+//=========================================================
+
+
 
 // 释放该缓冲区。
 --brelse(bh);
