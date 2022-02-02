@@ -21,4 +21,11 @@ sys_setup
         hd_info[drive].sect = *(unsigned char *) (14 + BIOS);   // 每磁道扇区数。
         BIOS += 16;     // 每个硬盘的参数表长16 字节，这里BIOS 指向下一个表。
 --}
+
+// 设置每个硬盘的起始扇区号和扇区总数。其中编号i*5 含义参见本程序后的有关说明。
+--for (i = 0; i < NR_HD; i++)
+--{
+        hd[i * 5].start_sect = 0;   // 硬盘起始扇区号。
+        hd[i * 5].nr_sects = hd_info[i].head * hd_info[i].sect * hd_info[i].cyl;    // 硬盘总扇区数。
+--}
 ```
