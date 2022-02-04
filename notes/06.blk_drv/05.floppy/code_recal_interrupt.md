@@ -27,3 +27,21 @@ do_fd_request
 --if (recalibrate)
 ----recalibrate_floppy
 ```
+
+#3. recalibrate_floppy
+
+```cpp
+//// 软盘重新校正处理函数。
+// 向软盘控制器FDC 发送重新校正命令和参数，并复位重新校正标志。
+static void
+recalibrate_floppy (void)
+{
+    recalibrate = 0;        // 复位重新校正标志。
+    current_track = 0;      // 当前磁道号归零。
+    do_floppy = recal_interrupt;    // 置软盘中断调用函数指针指向重新校正调用函数。
+    output_byte (FD_RECALIBRATE);   // 发送命令：重新校正。
+    output_byte (head << 2 | current_drive);    // 发送参数：（磁头号加）当前驱动器号。
+    if (reset)          // 如果出错(复位标志被置位)则继续执行软盘请求。
+        do_fd_request ();
+}
+```
