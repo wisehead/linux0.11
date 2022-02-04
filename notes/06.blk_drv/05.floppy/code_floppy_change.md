@@ -12,6 +12,22 @@
 floppy_change
 --repeat:
 --floppy_on (nr);     // 开启指定软驱nr（kernel/sched.c,251）。
+// 如果当前选择的软驱不是指定的软驱nr，并且已经选择其它了软驱，则让当前任务进入可中断
+// 等待状态。
+--while ((unsigned int)(current_DOR & 3) != nr && selected)
+        interruptible_sleep_on (&wait_on_floppy_select);
+// 如果当前没有选择其它软驱或者当前任务被唤醒时，当前软驱仍然不是指定的软驱nr，则循环等待。
+--if ((unsigned int)(current_DOR & 3) != nr)
+        goto repeat;
+// 取数字输入寄存器值，如果最高位（位7）置位，则表示软盘已更换，此时关闭马达并退出返回1。
+// 否则关闭马达退出返回0。
+--if (inb (FD_DIR) & 0x80)
+    {
+        floppy_off (nr);
+        return 1;
+    }
+--floppy_off (nr);
+--return 0;
 ```
 
 #2.floppy_on
@@ -53,7 +69,7 @@ int ticks_to_floppy_on (unsigned int nr)
 // 此后更新当前数字输出寄存器值current_DOR。
     if (mask != current_DOR)
     {
-        outb (mask, FD_DOR);//这个命令不知道什么意思？？？？？？
+        outb (mask, FD_DOR);
         if ((mask ^ current_DOR) & 0xf0)
             mon_timer[nr] = HZ / 2;
         else if (mon_timer[nr] < 2)
@@ -65,4 +81,16 @@ int ticks_to_floppy_on (unsigned int nr)
 }
 
 ```
+
+#4.notes
+
+```
+ticks_to_floppy_on
+
+outb (mask, FD_DOR);
+//这个命令不知道什么意思？？？？？？
+这里边前四个bit是启动电机，后面四个bit是启动驱动FDC。
+
+```
+
 
