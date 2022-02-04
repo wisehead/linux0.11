@@ -26,3 +26,43 @@ void floppy_on (unsigned int nr)
     sti ();         // 开中断。
 }
 ```
+
+#3. ticks_to_floppy_on
+
+```cpp
+// 指定软盘到正常运转状态所需延迟滴答数（时间）。
+// nr -- 软驱号(0-3)，返回值为滴答数。
+int ticks_to_floppy_on (unsigned int nr)
+{
+    extern unsigned char selected;  // 当前选中的软盘号(kernel/blk_drv/floppy.c,122)。
+    unsigned char mask = 0x10 << nr;    // 所选软驱对应数字输出寄存器中启动马达比特位。
+
+    if (nr > 3)
+        panic ("floppy_on: nr>3");  // 最多4 个软驱。
+    moff_timer[nr] = 10000; /* 100 s = very big :-) */
+    cli ();         /* use floppy_off to turn it off */
+    mask |= current_DOR;
+// 如果不是当前软驱，则首先复位其它软驱的选择位，然后置对应软驱选择位。
+    if (!selected)
+    {
+        mask &= 0xFC;
+        mask |= nr;
+    }
+// 如果数字输出寄存器的当前值与要求的值不同，则向FDC 数字输出端口输出新值(mask)。并且如果
+// 要求启动的马达还没有启动，则置相应软驱的马达启动定时器值(HZ/2 = 0.5 秒或50 个滴答)。
+// 此后更新当前数字输出寄存器值current_DOR。
+    if (mask != current_DOR)
+    {
+        outb (mask, FD_DOR);//这个命令不知道什么意思？？？？？？
+        if ((mask ^ current_DOR) & 0xf0)
+            mon_timer[nr] = HZ / 2;
+        else if (mon_timer[nr] < 2)
+            mon_timer[nr] = 2;
+        current_DOR = mask;
+    }
+    sti ();
+    return mon_timer[nr];
+}
+
+```
+
