@@ -12,3 +12,10 @@ gotoxy
 --y = new_y;                                                 
 --pos = origin + y * video_size_row + (x << 1);              
 ```
+
+#2.caller
+
+```
+- restore_cur
+- con_write
+```
