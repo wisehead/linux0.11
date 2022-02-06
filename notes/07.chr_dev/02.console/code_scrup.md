@@ -70,8 +70,25 @@ scrup
 // %2-edi(top 行所处的内存位置)；%3-esi(top+1 行所处的内存位置)。
 ----else
 ----{
-                                                                     
-                                                                                
+--------t1 = (bottom - top - 1) * video_num_columns >> 1;                         
+--------t2 = origin + video_size_row * top;                                       
+--------t3 = origin + video_size_row * (top + 1);                                 
+--------_asm {                                                                    
+            pushf                                                                 
+            //mov ecx,((bottom - top - 1) * video_num_columns >> 1);              
+            mov ecx,t1;                                                           
+            //mov edi,(origin + video_size_row * top);                            
+            mov edi,t2;                                                           
+            //mov esi,(origin + video_size_row * (top + 1));                      
+            mov esi,t3;                                                           
+            mov ax,video_erase_char;                                              
+            cld;    // 清方向位。                                                      
+            rep movsd;// 循环操作，将top+1 到bottom 行 所对应的内存块移到top 行开始处。                 
+            mov ecx,video_num_columns;  // ecx = 1 行字符数。                          
+            rep stosw;// 在新行上填入擦除字符。                                              
+            popf                                                                  
+--------}                                                                         
+                                                                         
 ----}//end else
 --}//end if (video_type == VIDEO_TYPE_EGAC || video_type == VIDEO_TYPE_EGAM)
 // 如果显示类型不是EGA(是MDA)，则执行下面移动操作。因为MDA 显示控制卡会自动调整超出显示范围
