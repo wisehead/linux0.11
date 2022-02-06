@@ -96,5 +96,24 @@ scrup
 // 方法与EGA 非整屏移动情况完全一样。
 --else                /* Not EGA/VGA */
 --{
+----t1 = (bottom - top - 1) * video_num_columns >> 1;                         
+----t2 = origin + video_size_row * top;                                       
+----t3 = origin + video_size_row * (top + 1);                                 
+----_asm {                                                                    
+        pushf                                                                 
+        //mov ecx,((bottom - top - 1) * video_num_columns >> 1);              
+        mov ecx,t1;                                                           
+        //mov edi,(origin + video_size_row * top);                            
+        mov edi,t2;                                                           
+        //mov esi,(origin + video_size_row * (top + 1));                      
+        mov esi,t3;                                                           
+        mov ax,video_erase_char;                                              
+        cld;    // 清方向位。                                                      
+        rep movsd;// 循环操作，将top+1 到bottom 行 所对应的内存块移到top 行开始处。                 
+        mov ecx,video_num_columns;  // ecx = 1 行字符数。                          
+        rep stosw;// 在新行上填入擦除字符。                                              
+        popf                                                                  
+----}//end else                                                                         
+                                                                             
 --}
 ```
